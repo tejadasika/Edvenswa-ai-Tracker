@@ -1,4 +1,4 @@
-import { Pool, PoolConfig } from 'pg';
+import { Pool, PoolConfig, QueryResultRow } from 'pg';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -23,6 +23,6 @@ export const pool: Pool = global.__pgPool ?? new Pool(buildConfig());
 
 if (process.env.NODE_ENV !== 'production') global.__pgPool = pool;
 
-export async function query<T = any>(text: string, params: any[] = []) {
+export async function query<T extends QueryResultRow = any>(text: string, params: any[] = []) {
   return pool.query<T>(text, params);
 }

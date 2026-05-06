@@ -127,7 +127,7 @@ export async function DELETE(req: NextRequest) {
 // GET — does this user have ANY active auto-provisioned token (any device)?
 // Used by the dashboard to render the switch's initial position. Per-device
 // state isn't surfaced here yet; the switch reflects "tracking is on somewhere."
-export async function GET() {
+export async function GET(req: NextRequest) {
   const s = await getSession();
   if (!s.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
