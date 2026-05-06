@@ -1,0 +1,38 @@
+{
+  "name": "edvenswa-ai-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:init": "node scripts/init-db.mjs",
+    "admin:promote": "node scripts/promote-admin.mjs",
+    "admin:sole": "node scripts/set-sole-admin.mjs",
+    "admin:seed": "node scripts/seed-demo.mjs",
+    "docs:topics": "node scripts/gen-topic-tracking-doc.mjs",
+    "import:titles": "node scripts/import-chat-titles.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@google/generative-ai": "^0.21.0",
+    "@types/pg": "^8.20.0",
+    "bcryptjs": "^2.4.3",
+    "iron-session": "^8.0.3",
+    "next": "^14.2.35",
+    "openai": "^4.67.0",
+    "pg": "^8.20.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.7.4",
+    "@types/react": "^18.3.11",
+    "autoprefixer": "^10.4.20",
+    "docx": "^9.6.1",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.2"
+  }
+}
