@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme tokens. Components reference these via the Tailwind theme extension
+   in tailwind.config.ts (bg-app, text-app, border-app, etc.) so flipping
+   the [data-theme] attribute on <html> swaps every color at once. */
+:root,
+[data-theme='dark'] {
+  --color-app-bg:        #09090b;  /* zinc-950 */
+  --color-surface:       #18181b;  /* zinc-900 */
+  --color-surface-2:     #27272a;  /* zinc-800 */
+  --color-border:        #27272a;  /* zinc-800 */
+  --color-border-strong: #3f3f46;  /* zinc-700 */
+  --color-fg:            #e4e4e7;  /* zinc-200 */
+  --color-fg-muted:      #a1a1aa;  /* zinc-400 */
+  --color-fg-faint:      #71717a;  /* zinc-500 */
+  --color-accent:        #f97316;  /* orange-500 */
+  --color-accent-fg:     #ffffff;
+  --color-accent-soft:   rgba(249,115,22,0.16);
+  --color-success-fg:    #34d399;
+  --color-warn-fg:       #fbbf24;
+  --color-danger-fg:     #f87171;
+  --color-input-bg:      #09090b;
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  /* Warm off-white page background — pure #ffffff makes monospace text feel
+     glaring on a large screen. Slate-100/zinc-50 mix gives subtle paper-like
+     warmth without going beige.  */
+  --color-app-bg:        #f5f5f4;  /* stone-100 */
+  --color-surface:       #ffffff;
+  --color-surface-2:     #ececeb;  /* between stone-100 and stone-200 */
+  --color-border:        #d4d4d8;  /* zinc-300 — was too light at zinc-200 */
+  --color-border-strong: #a1a1aa;  /* zinc-400 */
+  --color-fg:            #1c1917;  /* stone-900 */
+  --color-fg-muted:      #44403c;  /* stone-700 — readable secondary */
+  --color-fg-faint:      #78716c;  /* stone-500 */
+  --color-accent:        #c2410c;  /* orange-700 — darker for AAA contrast on white */
+  --color-accent-fg:     #ffffff;
+  --color-accent-soft:   rgba(194,65,12,0.10);
+  --color-success-fg:    #047857;
+  --color-warn-fg:       #b45309;
+  --color-danger-fg:     #b91c1c;
+  --color-input-bg:      #ffffff;
+  color-scheme: light;
+}
+
+/* Status/role pill backgrounds. The dark-mode app uses bg-emerald-900/40
+   etc. directly; in light mode those wash out into a muddy gray. These
+   classes resolve to mode-appropriate values via [data-theme]. */
+.pill-success { background: rgb(16 185 129 / 0.18); color: #065f46; }
+[data-theme='dark'] .pill-success { background: rgb(16 185 129 / 0.18); color: #6ee7b7; }
+.pill-warn { background: rgb(245 158 11 / 0.18); color: #92400e; }
+[data-theme='dark'] .pill-warn { background: rgb(245 158 11 / 0.18); color: #fbbf24; }
+.pill-danger { background: rgb(239 68 68 / 0.18); color: #991b1b; }
+[data-theme='dark'] .pill-danger { background: rgb(239 68 68 / 0.18); color: #fca5a5; }
+.pill-neutral { background: var(--color-surface-2); color: var(--color-fg-muted); }
+.pill-info { background: rgb(99 102 241 / 0.16); color: #3730a3; }
+[data-theme='dark'] .pill-info { background: rgb(99 102 241 / 0.16); color: #a5b4fc; }
+.pill-cyan { background: rgb(6 182 212 / 0.16); color: #155e75; }
+[data-theme='dark'] .pill-cyan { background: rgb(6 182 212 / 0.16); color: #67e8f9; }
+
+html, body {
+  background: var(--color-app-bg);
+  color: var(--color-fg);
+  font-family: Consolas, 'Courier New', monospace;
+}
+
+/* Tabular numerals so monospace tables align cleanly. */
+table, .tabular { font-variant-numeric: tabular-nums; }
