@@ -88,8 +88,7 @@ export default function PlatformDonut({
               strokeDashoffset={seg.dashoffset}
             >
               <title>
-                {seg.label}: {seg.value.toLocaleString()}
-                {unit && ` ${unit}`} ({seg.pct.toFixed(1)}%)
+                {`${seg.label}: ${seg.value.toLocaleString('en-US')}${unit ? ` ${unit}` : ''} (${seg.pct.toFixed(1)}%)`}
               </title>
             </circle>
           ))}
@@ -111,7 +110,7 @@ export default function PlatformDonut({
           fontWeight="600"
           fill="#e4e4e7"
         >
-          {total.toLocaleString()}
+          {total.toLocaleString('en-US')}
         </text>
       </svg>
       <ul className="text-xs space-y-1.5">
@@ -123,7 +122,7 @@ export default function PlatformDonut({
             />
             <span className="text-fg capitalize">{seg.label}</span>
             <span className="text-fg-faint">
-              {seg.value.toLocaleString()}
+              {seg.value.toLocaleString('en-US')}
               {unit && ` ${unit}`}
             </span>
             <span className="text-fg-faint">· {seg.pct.toFixed(1)}%</span>
