@@ -343,15 +343,34 @@
       /\s*[-–|]\s*Gemini\s*$/i,
       /\s*[-–|]\s*Google\s*$/i,
       /\s*[-–|]\s*Perplexity(?:\s+AI)?\s*$/i,
+      // Copilot's title is "Microsoft Copilot" (no separator) or "<chat> | Microsoft Copilot".
+      // Strip the full brand first so "Microsoft" doesn't survive as a fake topic.
+      /\s*[-–|]\s*Microsoft\s+Copilot\s*$/i,
+      /\s*Microsoft\s+Copilot\s*$/i,
       /\s*[-–|]\s*Copilot\s*$/i,
       /\s*[-–|]\s*DeepSeek\s*$/i,
     ];
     let t = raw;
     for (const re of STRIP) t = t.replace(re, '');
     t = t.trim();
-    // New / empty chat placeholders we don't want to record as topics.
-    if (!t) return null;
-    if (/^(new chat|chatgpt|claude|gemini|perplexity|copilot|deepseek)$/i.test(t)) return null;
+
+    const isPlaceholder = (s) =>
+      !s ||
+      /^(new chat|chatgpt|claude|gemini|perplexity|copilot|microsoft copilot|deepseek)$/i.test(s);
+
+    // Copilot fallback: Copilot is a SPA that often does NOT update
+    // document.title to include the chat name. Read the single visible
+    // conversation-title element instead. We only touch one element by
+    // selector (no transcript reads), consistent with how the model picker works.
+    if (platform === 'copilot' && isPlaceholder(t)) {
+      const titleEl = document.querySelector(
+        'h1[data-testid*="conversation" i], [data-testid="conversation-title"], header h1, nav [aria-current="page"]',
+      );
+      const fromDom = (titleEl?.textContent || '').trim().replace(/\s+/g, ' ');
+      if (!isPlaceholder(fromDom)) return fromDom.slice(0, 256);
+    }
+
+    if (isPlaceholder(t)) return null;
     return t.slice(0, 256);
   }
 
