@@ -1,3 +1,9 @@
+// Safari exposes the WebExtension API as `browser.*`; alias it to `chrome.*`
+// so this file's chrome.* calls work unchanged on Safari.
+if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
+
 // Edvenswa AI Tracker — content script.
 //
 // Tracks foreground time per visit on a known AI site and emits one event

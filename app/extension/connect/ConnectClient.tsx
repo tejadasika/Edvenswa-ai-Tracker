@@ -1,87 +1,46 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-declare global {
-  interface Window {
-    chrome?: {
-      runtime?: {
-        sendMessage?: (
-          extensionId: string,
-          message: unknown,
-          callback?: (response: unknown) => void,
-        ) => unknown;
-        lastError?: { message?: string };
-      };
-    };
-    browser?: {
-      runtime?: {
-        sendMessage?: (
-          extensionId: string,
-          message: unknown,
-          callback?: (response: unknown) => void,
-        ) => unknown;
-        lastError?: { message?: string };
-      };
-    };
-  }
-}
+// Page → extension messaging now goes through a content-script bridge that
+// every supported browser-flavour of the extension injects on dashboard
+// origins. This works on Chrome, Edge, Firefox AND Safari — Safari Web
+// Extensions don't fully support `externally_connectable`, so the older
+// `chrome.runtime.sendMessage(extensionId, ...)` path doesn't work there.
+//
+// Protocol (mirrored in extension/dashboard-bridge.js):
+//   page  → bridge:  { __edvenswa: 'request',  id, payload }
+//   bridge → page:   { __edvenswa: 'response', id, ok, response | error }
+//   bridge → page:   { __edvenswa: 'ready' }   (presence ping on load)
 
-function getExtensionRuntime() {
-  if (typeof window === 'undefined') return null;
-  return window.chrome?.runtime ?? window.browser?.runtime ?? null;
-}
+type BridgeResponse = { __edvenswa: 'response'; id: string; ok: boolean; response?: unknown };
 
-function sendToExtension(extensionId: string, message: unknown): Promise<unknown | null> {
+function sendToExtension(message: unknown, timeoutMs = 3000): Promise<unknown | null> {
   return new Promise((resolve) => {
-    if (!extensionId || typeof window === 'undefined') {
-      resolve(null);
-      return;
-    }
-    const runtime = getExtensionRuntime();
-    if (!runtime?.sendMessage) {
-      resolve(null);
-      return;
-    }
+    if (typeof window === 'undefined') return resolve(null);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let settled = false;
-    const timeoutId = window.setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        resolve(null);
-      }
-    }, 2000);
-    try {
-      const maybePromise = runtime.sendMessage(extensionId, message, (response) => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeoutId);
-        if (window.chrome?.runtime?.lastError || window.browser?.runtime?.lastError) {
-          resolve(null);
-          return;
-        }
-        resolve(response ?? null);
-      });
-      if (maybePromise && typeof (maybePromise as Promise<unknown>).then === 'function') {
-        (maybePromise as Promise<unknown>)
-          .then((response) => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeoutId);
-            resolve(response ?? null);
-          })
-          .catch(() => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeoutId);
-            resolve(null);
-          });
-      }
-    } catch {
-      if (!settled) {
-        settled = true;
-        window.clearTimeout(timeoutId);
-        resolve(null);
-      }
-    }
+
+    const finish = (value: unknown | null) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('message', onMessage);
+      window.clearTimeout(timeoutId);
+      resolve(value);
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const data = event.data as BridgeResponse | undefined;
+      if (!data || data.__edvenswa !== 'response' || data.id !== id) return;
+      finish(data.ok ? (data.response ?? null) : null);
+    };
+
+    window.addEventListener('message', onMessage);
+    const timeoutId = window.setTimeout(() => finish(null), timeoutMs);
+    window.postMessage(
+      { __edvenswa: 'request', id, payload: message },
+      window.location.origin,
+    );
   });
 }
 
@@ -109,7 +68,7 @@ function safePrev(raw: string | null): string | null {
 }
 
 export default function ConnectClient({
-  extensionId,
+  extensionId: _extensionId,
   action,
   prevUrl,
 }: {
@@ -125,12 +84,6 @@ export default function ConnectClient({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!extensionId) {
-        setStatus('error');
-        setMessage('Missing extension id. Reopen the extension popup.');
-        return;
-      }
-
       // closeAfter tells the extension whether to close this tab on success.
       // If the extension reused a pre-existing dashboard tab (prevUrl set),
       // we navigate back ourselves instead of letting the extension destroy
@@ -148,14 +101,28 @@ export default function ConnectClient({
         }
       };
 
+      // Probe the bridge first. If the extension isn't installed we'll get
+      // a null back and can show a clear error instead of timing out twice.
+      const probe = (await sendToExtension({ type: 'ping' }, 1500)) as
+        | { ok?: boolean; installed?: boolean }
+        | null;
+      if (cancelled) return;
+      if (!probe || !probe.ok) {
+        setStatus('error');
+        setMessage(
+          'Could not reach the extension. Make sure it is installed and enabled in this browser, then try again from the popup.',
+        );
+        return;
+      }
+
       // Ask the extension for this install's device hash up-front. The server
       // labels the auto-provisioned token `auto:<deviceHash>` so each browser
       // gets its own token slot — connecting browser B no longer revokes
-      // browser A. If the extension is older and doesn't know the message,
-      // we fall back to legacy single-slot behavior.
-      const dhResp = (await sendToExtension(extensionId, {
-        type: 'getDeviceHash',
-      })) as { deviceHash?: string } | null;
+      // browser A's. Older extensions without this message return null and
+      // we fall back to the legacy single-slot behavior.
+      const dhResp = (await sendToExtension({ type: 'getDeviceHash' })) as {
+        deviceHash?: string;
+      } | null;
       const deviceHash =
         dhResp && typeof dhResp.deviceHash === 'string' ? dhResp.deviceHash : null;
       const browser = detectBrowser();
@@ -175,7 +142,7 @@ export default function ConnectClient({
           return;
         }
         const j = await r.json();
-        const ack = await sendToExtension(extensionId, {
+        const ack = await sendToExtension({
           type: 'provision',
           token: j.token,
           serverUrl: j.serverUrl ?? window.location.origin,
@@ -199,7 +166,7 @@ export default function ConnectClient({
           headers: { 'content-type': 'application/json' },
           body: provisionBody,
         });
-        await sendToExtension(extensionId, { type: 'unprovision', closeAfter });
+        await sendToExtension({ type: 'unprovision', closeAfter });
         if (cancelled) return;
         finish(safePrevUrl ? 'Disconnected. Returning…' : 'Disconnected. Closing…');
       }
@@ -207,7 +174,7 @@ export default function ConnectClient({
     return () => {
       cancelled = true;
     };
-  }, [extensionId, action, prevUrl]);
+  }, [action, prevUrl]);
 
   return (
     <div className="flex min-h-[40vh] items-center justify-center">

@@ -1,3 +1,7 @@
+if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
+
 // Popup: tracking switch (auto-connect to dashboard) + status + manual flush.
 //
 // Switch behavior:

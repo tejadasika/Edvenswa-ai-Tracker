@@ -1,3 +1,7 @@
+if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
+
 // Options page: load + save server URL and token via the background worker.
 
 const $ = (id) => document.getElementById(id);

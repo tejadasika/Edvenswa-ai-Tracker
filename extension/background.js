@@ -1,3 +1,10 @@
+// Safari exposes the WebExtension API as `browser.*`; recent Safari also
+// aliases it to `chrome.*`. Older Safari (and Firefox) only expose `browser`.
+// Aliasing here lets the rest of the file keep its `chrome.*` calls verbatim.
+if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
+
 // Edvenswa AI Tracker — background service worker (MV3).
 //
 // Responsibilities:
@@ -220,74 +227,82 @@ async function pingIfConfigured() {
 
 // ---------- message router ----------
 
-// External handler: lets the dashboard provision/unprovision the extension
-// without the user copying a token. Origin is enforced by the manifest's
-// `externally_connectable.matches`, so any sender that reaches this listener
-// has already been allowlisted at the browser level. We still reject unknown
-// message types defensively.
-chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
-  (async () => {
-    // After a successful provision/unprovision, close the dashboard's
-    // handshake tab. window.close() doesn't work on tabs opened via
-    // chrome.tabs.create, so we close them from the extension side using
-    // sender.tab.id. Tiny delay so the page's success state is visible
-    // for an instant before disappearing.
-    // Closing the sender tab is opt-in via msg.closeAfter. The dashboard's
-    // connect page sets this to true when it was opened in a fresh tab, and
-    // to false when it was navigated into an existing dashboard tab (in
-    // which case the page navigates itself back to its previous URL instead).
-    const maybeCloseSenderTab = (closeAfter) => {
-      if (!closeAfter) return;
-      const tabId = sender?.tab?.id;
-      if (typeof tabId === 'number') {
-        setTimeout(() => chrome.tabs.remove(tabId).catch(() => {}), 500);
-      }
-    };
-
-    if (msg?.type === 'provision') {
-      const token = typeof msg.token === 'string' ? msg.token.trim() : '';
-      const serverUrl = typeof msg.serverUrl === 'string' ? msg.serverUrl.trim() : '';
-      console.log(`[bg] received provision: token=${token.slice(0, 16)}... serverUrl=${serverUrl}`);
-      if (!token || !serverUrl) {
-        console.log('[bg] provision failed: missing token or serverUrl');
-        sendResponse({ ok: false, error: 'token and serverUrl required' });
-        return;
-      }
-      await setConfig({ token, serverUrl, paused: false });
-      console.log('[bg] config saved, paused=false');
-      await clearBackoff();
-      // Kick off an immediate flush so the dashboard sees activity quickly
-      // instead of waiting up to 60s for the next alarm.
-      const flushResult = await flush();
-      console.log('[bg] immediate flush result:', flushResult);
-      sendResponse({ ok: true });
-      maybeCloseSenderTab(msg.closeAfter);
-    } else if (msg?.type === 'unprovision') {
-      // Clear the token and pause. We don't wipe queued events — if the user
-      // re-enables, they still go out under the new token (same user_id).
-      await setConfig({ token: '', paused: true });
-      await clearQueue();
-      await clearBackoff();
-      sendResponse({ ok: true });
-      maybeCloseSenderTab(msg.closeAfter);
-    } else if (msg?.type === 'ping') {
-      // Cheap probe used by the dashboard to detect "is the extension installed?"
-      sendResponse({ ok: true, installed: true });
-    } else if (msg?.type === 'getDeviceHash') {
-      // Lets the dashboard tag the provisioned token with this install's
-      // device hash, so each browser gets its own token instead of stomping
-      // each other on the single per-user "auto-provisioned" slot.
-      const cfg = await getConfig();
-      sendResponse({ ok: true, deviceHash: cfg.deviceHash });
-    } else {
-      sendResponse({ ok: false, error: 'unknown message' });
+// Shared dashboard-handshake handler. Used by both onMessageExternal (Chrome's
+// direct page→extension path) and onMessage (Safari path, where a content-script
+// bridge forwards `window.postMessage` requests from dashboard pages because
+// Safari Web Extensions don't fully support `externally_connectable`).
+async function handleDashboardMessage(msg, sender) {
+  // After a successful provision/unprovision, close the dashboard's
+  // handshake tab. window.close() doesn't work on tabs opened via
+  // chrome.tabs.create, so we close them from the extension side using
+  // sender.tab.id. Tiny delay so the page's success state is visible
+  // for an instant before disappearing.
+  const maybeCloseSenderTab = (closeAfter) => {
+    if (!closeAfter) return;
+    const tabId = sender?.tab?.id;
+    if (typeof tabId === 'number') {
+      setTimeout(() => chrome.tabs.remove(tabId).catch(() => {}), 500);
     }
-  })();
-  return true;
-});
+  };
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === 'provision') {
+    const token = typeof msg.token === 'string' ? msg.token.trim() : '';
+    const serverUrl = typeof msg.serverUrl === 'string' ? msg.serverUrl.trim() : '';
+    console.log(`[bg] received provision: token=${token.slice(0, 16)}... serverUrl=${serverUrl}`);
+    if (!token || !serverUrl) {
+      return { ok: false, error: 'token and serverUrl required' };
+    }
+    await setConfig({ token, serverUrl, paused: false });
+    await clearBackoff();
+    const flushResult = await flush();
+    console.log('[bg] immediate flush result:', flushResult);
+    maybeCloseSenderTab(msg.closeAfter);
+    return { ok: true };
+  }
+  if (msg?.type === 'unprovision') {
+    await setConfig({ token: '', paused: true });
+    await clearQueue();
+    await clearBackoff();
+    maybeCloseSenderTab(msg.closeAfter);
+    return { ok: true };
+  }
+  if (msg?.type === 'ping') {
+    return { ok: true, installed: true };
+  }
+  if (msg?.type === 'getDeviceHash') {
+    const cfg = await getConfig();
+    return { ok: true, deviceHash: cfg.deviceHash };
+  }
+  return null; // not a dashboard-handshake message
+}
+
+// External handler: kept for Chrome (and any browser that supports
+// externally_connectable). Origin is enforced by the manifest.
+if (chrome.runtime.onMessageExternal) {
+  chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+    (async () => {
+      const result = await handleDashboardMessage(msg, sender);
+      sendResponse(result ?? { ok: false, error: 'unknown message' });
+    })();
+    return true;
+  });
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
+    // Dashboard handshake messages may arrive here via the content-script
+    // bridge (Safari path). Try the shared handler first; if it returns
+    // null the message wasn't a handshake type and we fall through to
+    // the popup/options/content-script handlers below.
+    if (
+      msg?.type === 'provision' ||
+      msg?.type === 'unprovision' ||
+      msg?.type === 'ping'
+    ) {
+      const result = await handleDashboardMessage(msg, sender);
+      sendResponse(result ?? { ok: false, error: 'unknown message' });
+      return;
+    }
     if (msg?.type === 'event') {
       const cfg = await getConfig();
       if (cfg.paused) return sendResponse({ ok: true, paused: true });
