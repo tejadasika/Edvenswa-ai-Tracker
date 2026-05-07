@@ -40,7 +40,8 @@
     "matches": [
       "http://localhost:3000/*",
       "http://127.0.0.1:3000/*",
-      "https://localhost:3000/*"
+      "https://localhost:3000/*",
+      "http://31.97.206.219:9031/*"
     ]
   },
   "options_ui": {

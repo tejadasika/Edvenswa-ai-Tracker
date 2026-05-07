@@ -18,7 +18,7 @@ const MAX_QUEUE = 1000;
 const MAX_BATCH = 200; // matches the server's MAX_EVENTS_PER_BATCH
 
 const DEFAULT_CONFIG = {
-  serverUrl: 'http://localhost:3000',
+  serverUrl: 'http://31.97.206.219:9031',
   token: '',
   paused: false,
   deviceHash: '',
