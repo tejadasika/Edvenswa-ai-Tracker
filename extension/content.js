@@ -12,17 +12,82 @@ if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'u
 
 (() => {
   const PLATFORM_BY_HOST = {
+    // OpenAI
     'chatgpt.com': 'chatgpt',
     'chat.openai.com': 'chatgpt',
+    // Anthropic
     'claude.ai': 'claude',
+    // Google
     'gemini.google.com': 'gemini',
+    'notebooklm.google.com': 'notebooklm',
+    // Perplexity
+    'perplexity.ai': 'perplexity',
     'www.perplexity.ai': 'perplexity',
+    // Microsoft
     'copilot.microsoft.com': 'copilot',
+    // DeepSeek
     'chat.deepseek.com': 'deepseek',
+    'deepseek.com': 'deepseek',
+    // xAI / Grok
+    'grok.com': 'grok',
+    'grok.x.ai': 'grok',
+    'x.ai': 'grok',
+    // Poe
+    'poe.com': 'poe',
+    // Character.AI
+    'character.ai': 'character-ai',
+    'beta.character.ai': 'character-ai',
+    // You.com
+    'you.com': 'you',
+    'chat.you.com': 'you',
+    // Mistral Le Chat
+    'chat.mistral.ai': 'mistral',
+    'mistral.ai': 'mistral',
+    // Kimi (Moonshot)
+    'kimi.com': 'kimi',
+    'www.kimi.com': 'kimi',
+    'kimi.moonshot.cn': 'kimi',
+    // Qwen (Alibaba)
+    'chat.qwen.ai': 'qwen',
+    'qwen.ai': 'qwen',
+    'tongyi.aliyun.com': 'qwen',
+    // HuggingChat (only /chat/* is in the manifest matches)
+    'huggingface.co': 'huggingchat',
+    // Inflection Pi
+    'pi.ai': 'pi',
+    // Phind
+    'phind.com': 'phind',
+    'www.phind.com': 'phind',
+    // Meta AI
+    'meta.ai': 'meta-ai',
+    'www.meta.ai': 'meta-ai',
+    // Groq
+    'groq.com': 'groq',
+    'chat.groq.com': 'groq',
+    // Cohere
+    'coral.cohere.com': 'cohere',
   };
 
-  const platform = PLATFORM_BY_HOST[location.hostname];
-  if (!platform) return; // host_permissions are wider than detection — be safe.
+  // Fallback when a hostname is permitted by the manifest (e.g. via a wildcard
+  // like *.x.ai or *.character.ai) but isn't explicitly mapped above. Strips
+  // common subdomain prefixes and returns the registrable second-level label so
+  // unknown subdomains still produce a sensible platform name. Example:
+  //   "console.x.ai"      -> "x"
+  //   "labs.mistral.ai"   -> "mistral"
+  //   "subdomain.you.com" -> "you"
+  function inferPlatform(host) {
+    if (!host) return null;
+    const h = host.toLowerCase().replace(
+      /^(www|chat|app|beta|labs|console|playground|preview|dev|staging)\./,
+      '',
+    );
+    const parts = h.split('.');
+    if (parts.length < 2) return h || null;
+    return parts[0] || null;
+  }
+
+  const platform = PLATFORM_BY_HOST[location.hostname] || inferPlatform(location.hostname);
+  if (!platform) return; // host_permissions cover only AI sites; bail otherwise.
 
   const browser = detectBrowser();
 

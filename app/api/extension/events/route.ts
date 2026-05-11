@@ -26,15 +26,12 @@ export const OPTIONS = preflight;
 // and surfacing fake cost numbers next to authoritative proxy costs is misleading.
 
 const MAX_EVENTS_PER_BATCH = 200;
-const ALLOWED_PLATFORMS = new Set([
-  'chatgpt',
-  'claude',
-  'gemini',
-  'perplexity',
-  'copilot',
-  'deepseek',
-  'other',
-]);
+// Platform names are open-ended: the extension reports a known label
+// (chatgpt, claude, ...) when the hostname is in its static map, and falls
+// back to a hostname-derived label (e.g. "mistral", "grok") otherwise. We no
+// longer gate on a hardcoded set — instead the value is length-capped and
+// shape-validated so a stray field can't poison the column.
+const PLATFORM_NAME_RE = /^[a-z0-9](?:[a-z0-9._-]{0,30}[a-z0-9])?$/;
 
 type RawEvent = {
   ai_platform?: unknown;
@@ -118,7 +115,7 @@ export async function POST(req: NextRequest) {
   // (one batch per browser per minute) so a transactional COPY isn't worth it.
   for (const ev of events) {
     const platform = asString(ev.ai_platform, 32)?.toLowerCase() ?? null;
-    if (!platform || !ALLOWED_PLATFORMS.has(platform)) {
+    if (!platform || !PLATFORM_NAME_RE.test(platform)) {
       rejected++;
       continue;
     }
