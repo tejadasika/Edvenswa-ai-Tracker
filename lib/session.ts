@@ -11,13 +11,20 @@ export type SessionData = {
   role?: Role;
 };
 
+// `secure` must reflect the actual deployment protocol, not NODE_ENV.
+// If the app is served over plain HTTP (e.g. an IP:port origin without TLS),
+// setting Secure causes the browser to silently drop the session cookie and
+// login appears to "succeed" but the next request has no session.
+const appOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN ?? '';
+const isHttps = appOrigin.startsWith('https://');
+
 export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET ?? 'dev-secret-must-be-32-chars-min!!',
   cookieName: 'edvenswa_ai_session',
   cookieOptions: {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isHttps,
   },
 };
 
